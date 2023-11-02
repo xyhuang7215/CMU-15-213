@@ -375,7 +375,6 @@ unsigned floatPower2(int x) {
   if (x > -127 && x <= 127)
     return (x + 127) << 23; 
 
-  // too large
-  if (x > 127)
-    return 0xFF << 23;
+  // too large (x > 127)
+  return 0xFF << 23;
 }
