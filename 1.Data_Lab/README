@@ -1,3 +1,32 @@
+This is my implement for Datalab, whose goal is to get familiar with bit-level representations of integers and by solving a series of programming "puzzles" with restricted operation lists and max ops.
+
+Wirte-up: https://csapp.cs.cmu.edu/3e/datalab.pdf
+My note : https://hackmd.io/@XinYao/rkGYNpgXa
+
+To build:
+```
+unix> make
+```
+
+To test correctness (without restricting rules):
+```
+unix> ./btest
+```
+
+To check the legality:
+```
+unix> ./dlc -e bits.c
+```
+
+To autograde 
+```
+unix> ./driver.pl
+```
+
+<br>
+<br>
+Below are original README of DataLab
+
 ***********************
 The CS:APP Data Lab
 Directions to Students
