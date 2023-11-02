@@ -163,7 +163,8 @@ int tmin(void) {
  *   Rating: 1
  */
 int isTmax(int x) {
-  return !~(x ^ (1 << 31));
+  // return !~(x ^ (1 << 31));
+  return !(~(x + 1) ^ x) & !!(x + 1);
 }
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -174,7 +175,8 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
-  int mask = 0xAA + (0xAA << 8);
+  int mask = 0xAA;
+  mask += mask << 8;
   mask += mask << 16;
   return !((mask & x) ^ mask);
 }
@@ -199,12 +201,12 @@ int negate(int x) {
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
-  int signBit = 1 << 31;
-  int negLowerBound = ~0x30 + 1; // x - 30 >= 0
-  int negUpperBound = ~0x39; // x - 40 < 0
-  int greaterThanLower = !((signBit & (x + negLowerBound)));
-  int lessThanUpper = (signBit & (x + negUpperBound)) >> 31;
-  return greaterThanLower & lessThanUpper;
+  int sign_bit = 1 << 31;
+  int neg_incl_lower_bound = ~0x30 + 1;     // x - 0x30 >= 0
+  int neg_excl_upper_bound = ~0x3A + 1;     // x - 0x40 < 0
+  int greater_or_qual_lb = !((sign_bit & (x + neg_incl_lower_bound)));
+  int less_than_ub = (sign_bit & (x + neg_excl_upper_bound)) >> 31;   // shift to rightmost
+  return greater_or_qual_lb & less_than_ub;
 }
 /* 
  * conditional - same as x ? y : z 
@@ -214,8 +216,8 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
-  x = !!x; // x = 1 -> x = all ones / x = 0 -> x = all zeros
-  x = ~x + 1;
+  x = !!x; 
+  x = ~x + 1; // x = 1 -> x = all ones / x = 0 -> x = all zeros
   return (x & y) | (~x & z);
 }
 /* 
@@ -226,16 +228,15 @@ int conditional(int x, int y, int z) {
  *   Rating: 3
  */
 int isLessOrEqual(int x, int y) {
-  // 異號回正 同號相減
-  int signBit = 1 << 31;
-  int xSign = (signBit & x) >> 31;
-  int ySign = (signBit & y) >> 31;
-  int isDiffSign = xSign ^ ySign;
+  int sign_bit = 1 << 31;
+  int x_sign = (sign_bit & x) >> 31;
+  int y_sign = (sign_bit & y) >> 31;
+  int is_sign_diff = x_sign ^ y_sign;
 
-  int negX = ~x + 1; // 要用 y - x >= 0來確認(第一位Bit為0)
-  int offsetSign = (negX + y) >> 31;
+  int neg_x = ~x + 1;
+  int offset_sign = (neg_x + y) >> 31;  // sign(y - x)
 
-  return (isDiffSign & !ySign) | (!isDiffSign & !offsetSign);
+  return (is_sign_diff & !y_sign) | (!is_sign_diff & !offset_sign);
 }
 //4
 /* 
@@ -247,9 +248,9 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4 
  */
 int logicalNeg(int x) {
-  // only 0 
-  int negX = ~x + 1;
-  return (~(x | negX) >> 31) & 1;
+  // For pairs (x, -x), only (0, -0) have same sign bit 0
+  int neg_x = ~x + 1;
+  return (~(x | neg_x) >> 31) & 1;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -264,12 +265,13 @@ int logicalNeg(int x) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-  int b16, b8, b4, b2, b1;
+  int b16, b8, b4, b2, b1, b0;
   int sign = x >> 31;
   x = (~sign & x) | (sign & ~x);
 
-  b16 = !!(x >> 16) << 4;
-  x = x >> b16;
+  // binary search
+  b16 = !!(x >> 16) << 4;   // check if the most significant 16 bits has been set
+  x = x >> b16;             // if there's bit being set, shift x 16 bits and check remain parts
   b8 = !!(x >> 8) << 3;
   x = x >> b8;
   b4 = !!(x >> 4) << 2;
@@ -278,7 +280,8 @@ int howManyBits(int x) {
   x = x >> b2;
   b1 = !!(x >> 1);
   x = x >> b1;
-  return 1 + b16 + b8 + b4 + b2 + b1 + x;
+  b0 = x;
+  return b16 + b8 + b4 + b2 + b1 + b0 + 1;
 }
 //float
 /* 
@@ -293,19 +296,20 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-  unsigned expMask = 0xFF << 23;
-  unsigned exp = uf & expMask;
+  unsigned exp_mask = 0xFF << 23;
   unsigned sign = uf & (0x1 << 31);
-  // NAN
-  if (exp == expMask)
+  unsigned exp = uf & exp_mask;
+  unsigned new_exp;
+  // NaN
+  if (exp == exp_mask)
     return uf;
 
   // Denomalized
   if (exp == 0)
     return uf << 1 | sign;
 
-  unsigned newExp = ((exp >> 23) + 1) << 23;
-  return (uf & ~expMask) | newExp;
+  new_exp = ((exp >> 23) + 1) << 23;
+  return (uf & ~exp_mask) | new_exp;
 }
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -320,18 +324,23 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  unsigned  sign = uf & (0x1 << 31);
-  unsigned  exp = (uf >> 23) & 0xFF;
-  unsigned  frac = uf & 0x7FFFFF;
-  int E = (int)exp - 127;
+  unsigned sign = uf & (0x1 << 31);
+  unsigned exp = (uf >> 23) & 0xFF;
+  unsigned frac = uf & 0x7FFFFF;
+  int E = exp - 127;
 
+  // (Nan and infinity) or Out of range
   if (exp == 0xFF || E >= 31)
     return 0x80000000u;
 
+  // exponent is too small (0.xxx) 
   if (E < 0) 
     return 0;
 
+  // normal case : add hidden 1 to fraction part
   frac |= (1 << 23);
+
+  // align the exponent
   if (E <= 23) 
     frac >>= (23 - E);
   else
@@ -354,15 +363,19 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    if (x > 127)
-      return 0xFF << 23;
-    
-    if (x < -149)
-      return 0;
+  // too small 
+  if (x < -149)
+    return 0;
 
-    if (x >= -149 && x <= -127)
-      return 1 << (x + 126 + 23);
-    
-    return (x + 127) << 23; // fraction part 為0
+  // denormalized number
+  if (x >= -149 && x <= -127)
+    return 1 << (x + 149);
 
+  // E = x + 127 / frac : all zeros
+  if (x > -127 && x <= 127)
+    return (x + 127) << 23; 
+
+  // too large
+  if (x > 127)
+    return 0xFF << 23;
 }
