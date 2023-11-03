@@ -204,9 +204,9 @@ int isAsciiDigit(int x) {
   int sign_bit = 1 << 31;
   int neg_incl_lower_bound = ~0x30 + 1;     // x - 0x30 >= 0
   int neg_excl_upper_bound = ~0x3A + 1;     // x - 0x40 < 0
-  int greater_or_qual_lb = !((sign_bit & (x + neg_incl_lower_bound)));
+  int greater_or_equal_lb = !((sign_bit & (x + neg_incl_lower_bound)));
   int less_than_ub = (sign_bit & (x + neg_excl_upper_bound)) >> 31;   // shift to rightmost
-  return greater_or_qual_lb & less_than_ub;
+  return greater_or_equal_lb & less_than_ub;
 }
 /* 
  * conditional - same as x ? y : z 
@@ -250,7 +250,7 @@ int isLessOrEqual(int x, int y) {
 int logicalNeg(int x) {
   // For pairs (x, -x), only (0, -0) have same sign bit 0
   int neg_x = ~x + 1;
-  return (~(x | neg_x) >> 31) & 1;
+  return ~((x | neg_x) >> 31) & 1;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -308,7 +308,7 @@ unsigned floatScale2(unsigned uf) {
   if (exp == 0)
     return uf << 1 | sign;
 
-  new_exp = ((exp >> 23) + 1) << 23;
+  new_exp = exp + (1 << 23);
   return (uf & ~exp_mask) | new_exp;
 }
 /* 
