@@ -1,6 +1,7 @@
 # Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,c
 # Edit at https://www.toptal.com/developers/gitignore?templates=visualstudiocode,c
 
+.vscode
 1.Data_Lab/.vscode
 2.Bomb_Lab/.vscode
 3.Attack_Lab/.vscode
