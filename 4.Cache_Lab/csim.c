@@ -15,42 +15,40 @@ typedef struct CacheLine
     int tag;
 } CacheLine;
 
-bool isVerboseMode = false;
-
-unsigned nIdxBits, nAssoc, nBlockBits;
+// global variables
+CacheLine **cache;
+bool is_verbose_mode = false;
+unsigned n_idx_bits, n_assoc, n_block_bits;
+unsigned n_sets;
+int hit, eviction, miss;
 char *traceFile;
 
-CacheLine **cache;
-unsigned nSets;
-
-int hit, eviction, miss;
-
-inline void* Calloc(int, int);
+inline void* Calloc(int, size_t);
 
 inline unsigned Pow(unsigned, unsigned);
 
-void printUsage();
+void PrintUsage();
 
-void parseCommand(int argc, char **argv);
+void ParseCommand(int argc, char **argv);
 
-void parseLine(char *, int *, int *, char [MAXLEN]);
+void ParseTrace(char *pType, int *pIdx, int *pTag, char *buf);
 
-inline void pushFront(int idx, CacheLine *);
+void CacheAccess(unsigned idx, unsigned tag);
 
-inline void deleteNode(CacheLine *);
+inline void CachePushFront(int idx, CacheLine *p);
 
-void accessCache(unsigned, unsigned);
+inline void CacheEraseNode(CacheLine *p);
 
 int main(int argc, char **argv)
 {
-    parseCommand(argc, argv);
-    // printf("%u %u %u \n", nIdxBits, nAssoc, nBlockBits);
+    ParseCommand(argc, argv);
+    // printf("%u %u %u \n", n_idx_bits, n_assoc, n_block_bits);
 
     // Allocate cache 
-    // Elements would point to dummyHead of cachelines
-    nSets = Pow(2, nIdxBits);
-    cache = (CacheLine **) Calloc(nSets, sizeof(CacheLine*));
-    for (unsigned i = 0; i < nSets; i++)
+    // Cache[i] points to dummy head
+    n_sets = Pow(2, n_idx_bits);
+    cache = (CacheLine **) Calloc(n_sets, sizeof(CacheLine*));
+    for (unsigned i = 0; i < n_sets; i++)
         cache[i] = (CacheLine*) Calloc(1, sizeof(CacheLine));
 
 
@@ -58,27 +56,28 @@ int main(int argc, char **argv)
     FILE *fp = fopen(traceFile, "r");
     while (fgets(buf, MAXLEN-1, fp) != NULL)
     {
-        // skip Instruction Load & empty string
+        // Skip loading instruction or Empty string
         if (*buf == 'I' || *buf == '\0') continue;
-        if (isVerboseMode) printf("%s", buf);
+        if (is_verbose_mode) printf("%s", buf);
 
         char type;
         int idx, tag;
-        parseLine(&type, &idx, &tag, buf);
+        ParseTrace(&type, &idx, &tag, buf);
 
-        accessCache(idx, tag);
-        if (type == 'M') accessCache(idx, tag);
+        CacheAccess(idx, tag);
+        if (type == 'M') CacheAccess(idx, tag);
             
-        if (isVerboseMode) putchar('\n');
+        if (is_verbose_mode) putchar('\n');
     }
 
     printSummary(hit, miss, eviction);
     return 0;
 }
 
-void* Calloc(int n, int s)
+
+void* Calloc(int num, size_t size)
 {
-    void *p = calloc(n, s);
+    void *p = calloc(num, size);
     if (p == NULL)
     {
         fprintf(stderr, "Bad calloc : %s", strerror(errno));
@@ -86,6 +85,7 @@ void* Calloc(int n, int s)
     }
     return p;
 }
+
 
 unsigned Pow(unsigned base, unsigned exp)
 {
@@ -96,7 +96,7 @@ unsigned Pow(unsigned base, unsigned exp)
 }
 
 
-void printUsage()
+void PrintUsage()
 {
     printf("./csim [-hv] -s <num> -E <num> -b <num> -t <file>\n");
     printf("Options:\n");
@@ -109,7 +109,7 @@ void printUsage()
 }
 
 
-void parseCommand(int argc, char **argv)
+void ParseCommand(int argc, char **argv)
 {
     int cmd_opt = 0;
     while((cmd_opt = getopt(argc, argv, "hvs:E:b:t:")) != -1)
@@ -117,19 +117,19 @@ void parseCommand(int argc, char **argv)
         switch (cmd_opt) 
         {
             case 'h':
-                printUsage();
+                PrintUsage();
                 exit(0);
             case 'v':
-                isVerboseMode = true;
+                is_verbose_mode = true;
                 break;
             case 's':
-                nIdxBits = atoi(optarg);
+                n_idx_bits = atoi(optarg);
                 break;
             case 'E':
-                nAssoc = atoi(optarg);
+                n_assoc = atoi(optarg);
                 break;
             case 'b':
-                nBlockBits = atoi(optarg);
+                n_block_bits = atoi(optarg);
                 break;
             case 't':
                 traceFile = optarg;
@@ -137,16 +137,17 @@ void parseCommand(int argc, char **argv)
 
             case '?':
             default:
-                printUsage();
+                PrintUsage();
                 exit(0);
         }
     }
 }
 
-void parseLine(char *pType, int *pIdx, int *pTag, char buf[MAXLEN])
+
+void ParseTrace(char *pType, int *pIdx, int *pTag, char *buf)
 {
-    // skip white spaces
-    while (*buf && *buf == ' ') buf++;
+    // Skip white spaces
+    while (*buf && *buf == ' ') ++buf;
 
     // Get type
     *pType = *buf;
@@ -154,72 +155,82 @@ void parseLine(char *pType, int *pIdx, int *pTag, char buf[MAXLEN])
 
     // Parse address [ tag | idx | offset ] into tag and index  
     uint64_t address;
-    sscanf(buf, "%lx", &address); // !! lx
+    sscanf(buf, "%lx", &address); // hex
 
-    // shift offset bits out -> address : [0..00 | tag | idx ]
-    address >>= nBlockBits;
+    // Shift out offset bits -> current address : [0..00 | tag | idx ]
+    address >>= n_block_bits;
 
-    // idxMask : [0...01..1]
-    uint64_t idxMask = -1;
-    idxMask >>= 64 - nIdxBits;
+    // idx_mask : [0...00 | 0...00 | 1...11]
+    uint64_t idx_mask = -1;
+    idx_mask >>= 64 - n_idx_bits;
 
-    *pIdx = address & idxMask;
-    *pTag = address >> nIdxBits;
+    *pIdx = address & idx_mask;
+    *pTag = address >> n_idx_bits;
 }
 
 
-void pushFront(int idx, CacheLine *p)
+void CacheAccess(unsigned idx, unsigned tag)
 {
-    CacheLine *oldHead = cache[idx]->next;
-    p->next = oldHead;
-    p->prev = cache[idx];
-    cache[idx]->next = p;
-    if (oldHead != NULL) oldHead->prev = p;
-}
-
-void deleteNode(CacheLine *p)
-{
-    p->prev->next = p->next;
-    if (p->next)
-        p->next->prev = p->prev;
-}
-
-
-
-void accessCache(unsigned idx, unsigned tag)
-{
-    CacheLine* cLinePtr = cache[idx]->next, *prevPtr;
+    CacheLine *cache_line = cache[idx]->next, *prev_cache_line;
     unsigned count;
-    for (count = 0; count < nAssoc; count++)
+    for (count = 0; count < n_assoc; count++)
     {
-        if (cLinePtr == NULL) break;
-        if (cLinePtr->tag == tag)
+        // Not found
+        if (cache_line == NULL) break;
+        // Hit
+        if (cache_line->tag == tag)
         {
-            // delete from list, and insert at head
-            deleteNode(cLinePtr);
-            pushFront(idx, cLinePtr);
             ++hit;
-            if (isVerboseMode) printf(" hit ");
+            if (is_verbose_mode) printf(" hit ");
+
+            // delete from list, and insert at head
+            CacheEraseNode(cache_line);
+            CachePushFront(idx, cache_line);
             return;
         }
-        prevPtr = cLinePtr;
-        cLinePtr = cLinePtr->next;
+        prev_cache_line = cache_line;
+        cache_line = cache_line->next;
     }
 
     // miss
     ++miss;
-    if (isVerboseMode) printf(" miss ");
+    CacheLine *new_cache_line;
+    if (is_verbose_mode) printf(" miss ");
 
-    if (count == nAssoc)
+    // if full 
+    if (count == n_assoc)
     {
-        deleteNode(prevPtr);
-        free(prevPtr);
         ++eviction;
-        if (isVerboseMode) printf(" eviction ");
+        if (is_verbose_mode) printf(" eviction ");
+
+        // delete last node
+        CacheEraseNode(prev_cache_line);
+        new_cache_line = prev_cache_line;
+        new_cache_line->tag = tag;
+        CachePushFront(idx, new_cache_line);
+        return;
     }
 
     // allocate new node, and insert at head
-    cLinePtr = (CacheLine*) Calloc(1, sizeof(CacheLine));
-    cLinePtr->tag = tag;
-    pushFront(idx, cLinePtr);
+    new_cache_line = (CacheLine*) Calloc(1, sizeof(CacheLine));
+    new_cache_line->tag = tag;
+    CachePushFront(idx, new_cache_line);
+}
+
+
+void CachePushFront(int idx, CacheLine *p)
+{
+    p->next = cache[idx]->next;
+    p->prev = cache[idx];
+    if (cache[idx]->next != NULL) 
+        cache[idx]->next->prev = p;
+    cache[idx]->next = p;
+}
+
+
+void CacheEraseNode(CacheLine *p)
+{
+    p->prev->next = p->next;
+    if (p->next)
+        p->next->prev = p->prev;
 }
