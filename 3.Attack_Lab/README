@@ -1,4 +1,4 @@
-This is my implement for Datalab, whose goal is to get familiar with bit-level representations of integers and by solving a series of programming "puzzles" with restricted operation lists and max ops.
+This is my implement for Attack Lab, whose goal is to learn how to use buffer overflow and return-oriented programming (ROP) to attack a program.
 
 Wirte-up: http://csapp.cs.cmu.edu/3e/attacklab.pdf
 My note : https://hackmd.io/@XinYao/rkiu2vJ7T
