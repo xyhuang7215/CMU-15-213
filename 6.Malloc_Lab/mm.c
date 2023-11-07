@@ -54,8 +54,8 @@ team_t team = {
 
 #define PACK(size, alloc) ((size) | (alloc))
 
-#define GET(p) (*(unsigned int*)(p))
-#define PUT(p, val) (*(unsigned int*)(p) = (unsigned) val)
+#define GET(p) (*(unsigned *)(p))
+#define PUT(p, val) (*(unsigned *)(p) = (unsigned) val)
 
 #define GET_SIZE(p) (GET(p) & ~0x7)
 #define GET_ALLOC(p) (GET(p) & 0x1)
@@ -66,26 +66,34 @@ team_t team = {
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE((char *)(bp) - WSIZE))
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE))
 
+/* Get the address to store next or previous free block from a given block pointer */
 #define NEXT_FPTR(bp) ((char *)(bp))
 #define PREV_FPTR(bp) ((char *)(bp) + WSIZE)
-#define NEXT_FRBLKP(bp) (char *)(*((unsigned*) NEXT_FPTR(bp)))
-#define PREV_FRBLKP(bp) (char *)(*((unsigned*) PREV_FPTR(bp)))
+
+/* Get the block pointer to next or previous free block */
+#define NEXT_FRBLKP(bp) ((char *)(*((unsigned *) NEXT_FPTR(bp))))
+#define PREV_FRBLKP(bp) ((char *)(*((unsigned *) PREV_FPTR(bp))))
+
 
 /* Global variables */
-char *bp_start;
+char *free_bp_start;
 
-static void pop_list(void *bp);
+/* Interface for allocator*/
+int mm_init(void);
+void *mm_malloc(size_t size);
+void mm_free(void *ptr);
+void *mm_realloc(void *ptr, size_t size);
 
-static void push_front(void *bp);
-
-/* merge neighbor blocks, pop them from list if necessary */
-static void *coalesce(void *bp);
-
+/* Helper function for maintaining context of blocks */
 static void *extend_heap(size_t size);
+static void *coalesce(void *bp);
+static void place(char *bp, size_t asize);
 
-char *find_fit(size_t asize);
+/* Helper function for maintaining free list of blocks */
+static char *find_first_fit(size_t asize);
+static void push_front_list(void *bp);
+static void pop_from_list(void *bp);
 
-void place(char *bp, size_t asize);
 
 /* 
  * mm_init - initialize the malloc package.
@@ -99,33 +107,35 @@ int mm_init(void)
     PUT(heap + (1 * WSIZE), PACK(DSIZE, 1)); // prologue header
     PUT(heap + (2 * WSIZE), PACK(DSIZE, 1)); // prologue footer
     PUT(heap + (3 * WSIZE), PACK(0, 1));     // Epilogue
-    bp_start = NULL;
+    free_bp_start = NULL;
     return 0;
 }
 
+
 /* 
- * mm_malloc - Allocate a block by incrementing the brk pointer.
+ * mm_malloc - Allocate a block from free list or by incrementing the brk pointer.
  *     Always allocate a block whose size is a multiple of the alignment.
  */
 void *mm_malloc(size_t size)
 {
-    if (size == 0)
-      return NULL;
-    size_t asize = ALIGN(size + DSIZE); // overhead
+    if (size == 0) return NULL;
+    size_t asize = ALIGN(size + DSIZE); // demanded size + overhead
 
     char *bp;
-    if ((bp = find_fit(asize)) != NULL) {
-      pop_list(bp);
+    if ((bp = find_first_fit(asize)) != NULL) {
+      pop_from_list(bp);
       place(bp, asize);
       return bp;
     }
 
-    if ((bp = extend_heap(asize)) == NULL) 
-      return NULL;
-    // no pop here
-    place(bp, asize);
-    return bp;
+    if ((bp = extend_heap(asize)) != NULL) {
+      place(bp, asize);
+      return bp;
+    }
+
+    return NULL;
 }
+
 
 /*
  * mm_free - Freeing a block does nothing.
@@ -136,107 +146,32 @@ void mm_free(void *ptr)
     PUT(HDRP(ptr), PACK(size, 0));
     PUT(FTRP(ptr), PACK(size, 0));
     ptr = coalesce(ptr);
-    push_front(ptr);
+    push_front_list(ptr);
 }
 
+
 /*
- * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
+ * mm_realloc - Simply allocate a new space and copy context to it. 
+ *    Previous space is added to free_list.
  */
 void *mm_realloc(void *ptr, size_t size)
 {
-    void *oldptr = ptr;
-    void *newptr;
-    size_t copySize;
+    if (!ptr) return NULL;
+
+    void *old_ptr = ptr;
+    void *new_ptr = mm_malloc(size);
+    size_t orig_size = GET_SIZE(HDRP(ptr)) - WSIZE;
     
-    newptr = mm_malloc(size);
-    if (newptr == NULL)
+    if (!new_ptr)
       return NULL;
+    if (size < orig_size)
+      orig_size = size;
 
-    copySize = GET_SIZE(HDRP(ptr)) - WSIZE;
-    if (size < copySize)
-      copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
-    return newptr;
+    memcpy(new_ptr, old_ptr, orig_size);
+    mm_free(old_ptr);
+    return new_ptr;
 }
 
-void pop_list(void *bp)
-{
-    char *prev = PREV_FRBLKP(bp);
-    char *next = NEXT_FRBLKP(bp);
-
-    if (prev && next) {
-      PUT(NEXT_FPTR(prev), next);
-      PUT(PREV_FPTR(next), prev);
-    }
-
-    else if (prev && !next) {
-      PUT(NEXT_FPTR(prev), 0);
-    }
-
-    else if (!prev && next) {
-      PUT(PREV_FPTR(next), 0);
-      bp_start = next;
-    }
-
-    else if (!prev && !next) {
-      bp_start = NULL;
-    }
-}
-
-void push_front(void *bp)
-{
-    PUT(PREV_FPTR(bp), 0);
-    PUT(NEXT_FPTR(bp), bp_start);
-    
-    if (bp_start != NULL) {
-      PUT(PREV_FPTR(bp_start), bp);
-    }
-
-    bp_start = bp;
-}
-
-/* merge neighbor blocks, remove them from list if necessary */
-void *coalesce(void *bp)
-{
-    char *prev_bp = PREV_BLKP(bp);
-    char *next_bp = NEXT_BLKP(bp);
-    size_t prev_alloc = GET_ALLOC(HDRP(prev_bp));
-    size_t next_alloc = GET_ALLOC(HDRP(next_bp));
-    size_t size = GET_SIZE(HDRP(bp));
-
-    if (prev_alloc && next_alloc) {
-      ; // do nothing
-    }
-
-    else if (prev_alloc && !next_alloc) {
-      size += GET_SIZE(HDRP(next_bp));
-      PUT(HDRP(bp), PACK(size, 0));
-      PUT(FTRP(bp), PACK(size, 0));
-      pop_list(next_bp);
-    } 
-
-    else if (!prev_alloc && next_alloc) {
-      size += GET_SIZE(HDRP(prev_bp)); 
-      PUT(HDRP(prev_bp), PACK(size, 0));
-      PUT(FTRP(prev_bp), PACK(size, 0));
-      pop_list(prev_bp);
-      bp = PREV_BLKP(bp);
-    }
-
-    else if (!prev_alloc && !next_alloc) {
-      size += GET_SIZE(HDRP(prev_bp))+
-              GET_SIZE(HDRP(next_bp));
-
-      PUT(HDRP(prev_bp), PACK(size, 0));
-      PUT(FTRP(prev_bp), PACK(size, 0));
-      pop_list(prev_bp);
-      pop_list(next_bp);
-      bp = PREV_BLKP(bp);
-    }
-
-    return bp;
-}
 
 void *extend_heap(size_t size)
 {
@@ -255,17 +190,49 @@ void *extend_heap(size_t size)
     return coalesce(bp);
 }
 
-char *find_fit(size_t asize)
+
+/* merge neighbor blocks, remove them from free list if necessary */
+void *coalesce(void *bp)
 {
-    char *bp = bp_start;
-    while (bp != NULL) {
-      if (GET_SIZE(HDRP(bp)) >= asize) {
-        return bp;
-      }
-      bp = (char *) GET(bp);
+    char *prev_bp = PREV_BLKP(bp);
+    char *next_bp = NEXT_BLKP(bp);
+    size_t prev_alloc = GET_ALLOC(HDRP(prev_bp));
+    size_t next_alloc = GET_ALLOC(HDRP(next_bp));
+    size_t size = GET_SIZE(HDRP(bp));
+
+    if (prev_alloc && next_alloc) {
+      ; // do nothing
     }
-    return NULL;
+
+    else if (prev_alloc && !next_alloc) {
+      size += GET_SIZE(HDRP(next_bp));
+      PUT(HDRP(bp), PACK(size, 0));
+      PUT(FTRP(bp), PACK(size, 0));
+      pop_from_list(next_bp);
+    } 
+
+    else if (!prev_alloc && next_alloc) {
+      size += GET_SIZE(HDRP(prev_bp)); 
+      PUT(HDRP(prev_bp), PACK(size, 0));
+      PUT(FTRP(prev_bp), PACK(size, 0));
+      pop_from_list(prev_bp);
+      bp = PREV_BLKP(bp);
+    }
+
+    else if (!prev_alloc && !next_alloc) {
+      size += GET_SIZE(HDRP(prev_bp))+
+              GET_SIZE(HDRP(next_bp));
+
+      PUT(HDRP(prev_bp), PACK(size, 0));
+      PUT(FTRP(prev_bp), PACK(size, 0));
+      pop_from_list(prev_bp);
+      pop_from_list(next_bp);
+      bp = PREV_BLKP(bp);
+    }
+
+    return bp;
 }
+
 
 void place(char *bp, size_t asize)
 {
@@ -277,15 +244,66 @@ void place(char *bp, size_t asize)
       return;
     }
 
-    // // only use partial
+    // only use partial
     PUT(HDRP(bp), PACK(asize, 1));
     PUT(FTRP(bp), PACK(asize, 1));
 
-    // // handle the remain space
+    // handle the remain space
     char *free_bp = NEXT_BLKP(bp);
     size_t free_size = orig_size - asize;
     PUT(HDRP(free_bp), PACK(free_size, 0));
     PUT(FTRP(free_bp), PACK(free_size, 0));
     free_bp = coalesce(free_bp);
-    push_front(free_bp);
+    push_front_list(free_bp);
+}
+
+
+char *find_first_fit(size_t asize)
+{
+    char *bp = free_bp_start;
+    while (bp != NULL) {
+      if (GET_SIZE(HDRP(bp)) >= asize) {
+        return bp;
+      }
+      bp = (char *) GET(bp);
+    }
+    return NULL;
+}
+
+
+void push_front_list(void *bp)
+{
+    PUT(PREV_FPTR(bp), 0);
+    PUT(NEXT_FPTR(bp), free_bp_start);
+    
+    if (free_bp_start != NULL) {
+      PUT(PREV_FPTR(free_bp_start), bp);
+    }
+
+    free_bp_start = bp;
+}
+
+
+void pop_from_list(void *bp)
+{
+    char *prev = PREV_FRBLKP(bp);
+    char *next = NEXT_FRBLKP(bp);
+
+    if (prev && next) {
+      PUT(NEXT_FPTR(prev), next);
+      PUT(PREV_FPTR(next), prev);
+    }
+
+    else if (prev && !next) {
+      PUT(NEXT_FPTR(prev), 0);
+    }
+
+    else if (!prev && next) {
+      PUT(PREV_FPTR(next), 0);
+      free_bp_start = next;
+    }
+
+    else if (!prev && !next) {
+      free_bp_start = NULL;
+    }
 }

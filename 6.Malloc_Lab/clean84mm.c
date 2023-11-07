@@ -68,11 +68,11 @@ team_t team = {
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE))
 
 /* Global variables */
-char *bp_start, *bp_end;
+char *free_bp_start, *bp_end;
 
-static inline void push_front(void *bp)
+static inline void push_front_list(void *bp)
 {
-    bp_start = bp;
+    free_bp_start = bp;
 }
 
 /* merge neighbor blocks, and add bp to free list */
@@ -83,7 +83,7 @@ void *coalesce(void *bp)
     size_t size = GET_SIZE(HDRP(bp));
 
     if (prev_alloc && next_alloc) {
-      push_front(bp);
+      push_front_list(bp);
       return bp;
     }
 
@@ -93,7 +93,7 @@ void *coalesce(void *bp)
       size += GET_SIZE(HDRP(next_bp));
       PUT(HDRP(bp), PACK(size, 0));
       PUT(FTRP(bp), PACK(size, 0));
-      push_front(bp);
+      push_front_list(bp);
       return bp;
     }
 
@@ -104,7 +104,7 @@ void *coalesce(void *bp)
       bp = PREV_BLKP(bp);
       PUT(HDRP(bp), PACK(size, 0));
       PUT(FTRP(bp), PACK(size, 0));
-      push_front(bp);
+      push_front_list(bp);
       return bp;
     }
 
@@ -118,7 +118,7 @@ void *coalesce(void *bp)
       bp = PREV_BLKP(bp);
       PUT(HDRP(bp), PACK(size, 0));
       PUT(FTRP(bp), PACK(size, 0));
-      push_front(bp);
+      push_front_list(bp);
       return bp;
     }
 
@@ -153,14 +153,14 @@ int mm_init(void)
     PUT(heap + (1 * WSIZE), PACK(DSIZE, 1)); // prologue header
     PUT(heap + (2 * WSIZE), PACK(DSIZE, 1)); // prologue footer
     PUT(heap + (3 * WSIZE), PACK(0, 1));     // Epilogue
-    bp_start = heap + 2 * WSIZE;
+    free_bp_start = heap + 2 * WSIZE;
     bp_end = heap + 4 * WSIZE;
     return 0;
 }
 
-char *find_fit(size_t asize)
+char *find_first_fit(size_t asize)
 {
-    for (char *bp = bp_start; bp < bp_end; bp = NEXT_BLKP(bp)) {
+    for (char *bp = free_bp_start; bp < bp_end; bp = NEXT_BLKP(bp)) {
       if (!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize)
         return bp;
     }
@@ -201,7 +201,7 @@ void *mm_malloc(size_t size)
     size_t asize = ALIGN(size + DSIZE); // overhead
 
     char *bp;
-    if ((bp = find_fit(asize)) != NULL) {
+    if ((bp = find_first_fit(asize)) != NULL) {
       place(bp, asize);
       return bp;
     }
