@@ -93,8 +93,96 @@ rtest16:
 	$(DRIVER) -t trace16.txt -s $(TSHREF) -a $(TSHARGS)
 
 
+diff-all: diff01 diff02 diff03 diff04 diff05 diff06 diff07 diff08 diff09 diff10 diff11 diff12 diff13 diff14 diff15 diff16
+
+diff01:
+	$(DRIVER) -t trace01.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace01.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+	
+
+diff02:
+	$(DRIVER) -t trace02.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace02.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+diff03:
+	$(DRIVER) -t trace03.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace03.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+diff04:
+	$(DRIVER) -t trace04.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace04.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+diff05:
+	$(DRIVER) -t trace05.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace05.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+diff06:
+	$(DRIVER) -t trace06.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace06.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+diff07:
+	$(DRIVER) -t trace07.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace07.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+diff08:
+	$(DRIVER) -t trace08.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace08.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+diff09:
+	$(DRIVER) -t trace09.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace09.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+diff10:
+	$(DRIVER) -t trace10.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace10.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+diff11:
+	$(DRIVER) -t trace11.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace11.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+
+diff12:
+	$(DRIVER) -t trace12.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace12.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+
+diff13:
+	$(DRIVER) -t trace13.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace13.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+
+diff14:
+	$(DRIVER) -t trace14.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace14.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+
+diff15:
+	$(DRIVER) -t trace15.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace15.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
+
+diff16:
+	$(DRIVER) -t trace16.txt -s $(TSH) -a $(TSHARGS) > tmp.txt
+	$(DRIVER) -t trace16.txt -s $(TSHREF) -a $(TSHARGS) > reftmp.txt
+	-diff tmp.txt reftmp.txt -y
+
 # clean up
 clean:
 	rm -f $(FILES) *.o *~
-
+	rm tmp.txt reftmp.txt
 
