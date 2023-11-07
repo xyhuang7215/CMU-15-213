@@ -364,7 +364,7 @@ void waitfg(pid_t pid)
 
     while (fgpid(jobs))
         sleep(0);
-    return;
+return;
 }
 
 /*****************
