@@ -9,6 +9,9 @@
 5.Shell_Lab/.vscode
 6.Malloc_Lab/.vscode
 7.Porxy_Lab/.vscode
+7.Porxy_Lab/.proxy
+7.Porxy_Lab/.noproxy
+
 
 ### C ###
 # Prerequisites
