@@ -37,7 +37,7 @@ void CacheAccess(unsigned idx, unsigned tag);
 
 inline void CachePushFront(int idx, CacheLine *p);
 
-inline void CacheEraseNode(CacheLine *p);
+inline void CacheEraseNode(int idx, CacheLine *p);
 
 int main(int argc, char **argv)
 {
@@ -45,12 +45,8 @@ int main(int argc, char **argv)
     // printf("%u %u %u \n", n_idx_bits, n_assoc, n_block_bits);
 
     // Allocate cache 
-    // Cache[i] points to dummy head
     n_sets = Pow(2, n_idx_bits);
     cache = (CacheLine **) Calloc(n_sets, sizeof(CacheLine*));
-    for (unsigned i = 0; i < n_sets; i++)
-        cache[i] = (CacheLine*) Calloc(1, sizeof(CacheLine));
-
 
     char buf[MAXLEN];
     FILE *fp = fopen(traceFile, "r");
@@ -171,7 +167,8 @@ void ParseTrace(char *pType, int *pIdx, int *pTag, char *buf)
 
 void CacheAccess(unsigned idx, unsigned tag)
 {
-    CacheLine *cache_line = cache[idx]->next, *prev_cache_line;
+    CacheLine *cache_line = cache[idx], *prev_cache_line = NULL;
+
     unsigned count;
     for (count = 0; count < n_assoc; count++)
     {
@@ -183,8 +180,8 @@ void CacheAccess(unsigned idx, unsigned tag)
             ++hit;
             if (is_verbose_mode) printf(" hit ");
 
-            // delete from list, and insert at head
-            CacheEraseNode(cache_line);
+            // Delete from list, and insert at head
+            CacheEraseNode(idx, cache_line);
             CachePushFront(idx, cache_line);
             return;
         }
@@ -192,44 +189,60 @@ void CacheAccess(unsigned idx, unsigned tag)
         cache_line = cache_line->next;
     }
 
-    // miss
+    // Miss
     ++miss;
-    CacheLine *new_cache_line;
     if (is_verbose_mode) printf(" miss ");
 
-    // if full 
+    CacheLine *new_cache_line;
     if (count == n_assoc)
     {
         ++eviction;
         if (is_verbose_mode) printf(" eviction ");
 
-        // delete last node
-        CacheEraseNode(prev_cache_line);
+        // Delete last node
+        CacheEraseNode(idx, prev_cache_line);
         new_cache_line = prev_cache_line;
         new_cache_line->tag = tag;
         CachePushFront(idx, new_cache_line);
-        return;
+    } else {
+        // Allocate new node, and insert it at head
+        new_cache_line = (CacheLine*) Calloc(1, sizeof(CacheLine));
+        new_cache_line->tag = tag;
+        CachePushFront(idx, new_cache_line);
     }
-
-    // allocate new node, and insert at head
-    new_cache_line = (CacheLine*) Calloc(1, sizeof(CacheLine));
-    new_cache_line->tag = tag;
-    CachePushFront(idx, new_cache_line);
 }
 
 
 void CachePushFront(int idx, CacheLine *p)
 {
-    p->next = cache[idx]->next;
-    p->prev = cache[idx];
-    if (cache[idx]->next != NULL) 
-        cache[idx]->next->prev = p;
-    cache[idx]->next = p;
+    // Empty cache, insert and return
+    if (cache[idx] == NULL) {
+        p->prev = NULL;
+        p->next = NULL;
+        cache[idx] = p;
+        return;
+    }
+
+    // Update current head
+    if (cache[idx] != NULL) 
+        cache[idx]->prev = p;
+    
+    // Update cache and p
+    p->next = cache[idx];
+    p->prev = NULL;
+    cache[idx] = p;
 }
 
 
-void CacheEraseNode(CacheLine *p)
+void CacheEraseNode(int idx, CacheLine *p)
 {
+    // p is the head of cachelines
+    if (cache[idx] == p) {
+        cache[idx] = p->next;
+        return;
+    }
+
+    // Update neighbors
     p->prev->next = p->next;
     if (p->next)
         p->next->prev = p->prev;
