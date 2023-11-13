@@ -6,6 +6,7 @@
 2.Bomb_Lab/.vscode
 3.Attack_Lab/.vscode
 4.Cache_Lab/.vscode
+4.Cache_Lab/*.tmp
 5.Shell_Lab/.vscode
 6.Malloc_Lab/.vscode
 7.Porxy_Lab/.vscode
